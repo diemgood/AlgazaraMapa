@@ -1308,10 +1308,6 @@
         
     
             var layer_control_beaaf9fe38edbb3718245a213288a8aa_layers = {
-                base_layers : {
-                    "openstreetmap" : tile_layer_8b6cd60f9b14e87ef6ce013161d01b24,
-                    "cartodbpositron" : tile_layer_392d5bd5323570df4a7a38406a13b2b0,
-                },
                 overlays :  {
                     "1. Escultura Corocora" : feature_group_7b86023a4bd049832049a6e2597b3b21,
                     "2. Manga de Coleo" : feature_group_42a9479b7890442d4cb552341077990b,
@@ -1355,7 +1351,7 @@
             let layer_control_beaaf9fe38edbb3718245a213288a8aa = L.control.layers(
                 layer_control_beaaf9fe38edbb3718245a213288a8aa_layers.base_layers,
                 layer_control_beaaf9fe38edbb3718245a213288a8aa_layers.overlays,
-                {"autoZIndex": true, "collapsed": false, "position": "bottomright"}
+                {"autoZIndex": true, "collapsed": true, "position": "bottomright"}
             ).addTo(map_b7a24276482e9a2818f6e2a09f12bb85);
 
         
