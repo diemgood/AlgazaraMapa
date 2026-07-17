@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>San Martín de los Llanos · Mapa Turístico</title>
+<meta name="description" content="Mapa turístico interactivo de San Martín de los Llanos, Meta: monumentos, sitios turísticos, gastronomía, hospedaje y artesanos. Arma tu propio recorrido.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,700&family=Karla:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --tinta:#22301d;          /* verde monte, texto */
+  --papel:#fdfaf2;          /* crema de sabana */
+  --papel-2:#f4eede;
+  --linea:#e3dcc8;
+  --corocora:#d63d2a;       /* rojo escarlata: monumentos + ruta */
+  --sabana:#2f7a4b;         /* verde: sitios turísticos */
+  --atardecer:#dd8624;      /* naranja: gastronomía */
+  --cielo:#2e6f92;          /* azul: hospedaje */
+  --telar:#7a58a8;          /* violeta: artesanos */
+  --sombra:0 10px 30px rgba(34,48,29,.18);
+  --radio:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Karla',system-ui,sans-serif;color:var(--tinta);background:var(--papel);overflow:hidden}
+#map{position:fixed;inset:0;z-index:1;background:#dfe8d8}
+.leaflet-container{font:inherit}
+
+/* ---------- Panel izquierdo ---------- */
+#panel{
+  position:fixed;z-index:1000;top:14px;left:14px;
+  width:min(370px,calc(100vw - 28px));
+  max-height:calc(100dvh - 28px);
+  display:flex;flex-direction:column;
+  background:var(--papel);border:1px solid var(--linea);
+  border-radius:var(--radio);box-shadow:var(--sombra);overflow:hidden;
+}
+#brand{position:relative;padding:14px 16px 14px;color:#fff;
+  background:linear-gradient(160deg,#2c5c3b 0%,#356b44 45%,#7a9c53 100%);
+  display:flex;gap:12px;align-items:center}
+#brand .horizonte{position:absolute;inset:auto 0 0 0;height:26px;opacity:.95;pointer-events:none}
+#logo{width:52px;height:52px;border-radius:50%;object-fit:cover;flex:none;
+  border:2px solid rgba(255,255,255,.75);box-shadow:0 3px 10px rgba(0,0,0,.3);background:#fff}
+#brand .titulos{position:relative;z-index:1;min-width:0}
+#brand .eyebrow{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:#f3dfae}
+#brand h1{font-family:'Fraunces',serif;font-weight:650;font-size:clamp(18px,4.2vw,22px);line-height:1.1;margin-top:2px}
+#brand p{font-size:11.5px;margin-top:3px;color:#e8f0dd}
+#togglePanel{position:absolute;z-index:2;top:10px;right:10px;width:28px;height:28px;border-radius:9px;
+  border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.14);color:#fff;
+  font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#togglePanel:hover{background:rgba(255,255,255,.26)}
+
+#controles{padding:12px 14px 10px;border-bottom:1px solid var(--linea);background:var(--papel)}
+#buscador{position:relative}
+#buscador svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);opacity:.45}
+#q{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--linea);border-radius:11px;
+  background:#fff;font:inherit;font-size:14px;color:var(--tinta)}
+#q:focus{outline:2px solid var(--sabana);outline-offset:1px;border-color:transparent}
+#chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.chip{--c:var(--tinta);display:inline-flex;align-items:center;gap:5px;
+  padding:5px 10px;border-radius:999px;border:1.5px solid var(--linea);
+  background:#fff;font:inherit;font-size:12px;font-weight:700;color:var(--tinta);cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.chip .n{font-weight:400;opacity:.6}
+.chip:hover{border-color:var(--c)}
+.chip.on{background:var(--c);border-color:var(--c);color:#fff}
+.chip.on .dot{background:#fff}
+.chip.on .n{opacity:.85}
+#seleccion{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px}
+#seleccion .cnt{font-weight:800}
+#seleccion .sep{flex:1}
+#seleccion button{border:1.5px solid var(--linea);background:#fff;border-radius:9px;
+  padding:5px 10px;font:inherit;font-size:12px;font-weight:700;color:var(--tinta);cursor:pointer}
+#seleccion button:hover{border-color:var(--tinta)}
+
+#lista{overflow-y:auto;flex:1;padding:8px;background:var(--papel);scrollbar-width:thin}
+.tarjeta{display:grid;grid-template-columns:auto 48px 1fr;gap:10px;align-items:center;
+  width:100%;text-align:left;padding:8px;border:1px solid transparent;border-radius:12px;
+  background:transparent;cursor:pointer;color:inherit}
+.tarjeta:hover,.tarjeta:focus-visible{background:#fff;border-color:var(--linea)}
+.tarjeta.activa{background:#fff;border-color:var(--tinta)}
+.tarjeta.apagada{opacity:.45}
+.tarjeta input{width:17px;height:17px;accent-color:var(--sabana);cursor:pointer;flex:none}
+.tarjeta img{width:48px;height:48px;object-fit:cover;border-radius:10px;background:var(--papel-2)}
+.tarjeta b{display:block;font-size:13.5px;line-height:1.25}
+.tarjeta small{display:flex;align-items:center;gap:5px;font-size:11px;color:#6b7562;margin-top:2px}
+.tarjeta small i{width:7px;height:7px;border-radius:50%;flex:none}
+#sinResultados{padding:26px 14px;text-align:center;font-size:13.5px;color:#6b7562;display:none}
+
+#rutaBar{border-top:1px solid var(--linea);padding:10px 12px;background:var(--papel);
+  display:flex;gap:8px;align-items:center}
+#btnRuta{flex:1;padding:10px 12px;border-radius:11px;border:none;background:var(--corocora);
+  color:#fff;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:7px}
+#btnRuta:hover{filter:brightness(1.08)}
+#btnRuta:disabled{background:#c9c3b2;cursor:not-allowed}
+#btnQuitarRuta{display:none;padding:10px 12px;border-radius:11px;border:1.5px solid var(--linea);
+  background:#fff;font:inherit;font-size:13px;font-weight:700;color:var(--tinta);cursor:pointer}
+#btnQuitarRuta:hover{border-color:var(--tinta)}
+
+#panel.mini #controles,#panel.mini #lista,#panel.mini #sinResultados,#panel.mini #rutaBar{display:none}
+#panel.mini{max-height:none}
+
+/* ---------- Marcadores ---------- */
+.icnwrap{position:relative;width:56px;height:40px;filter:drop-shadow(0 3px 5px rgba(20,30,15,.45));
+  transition:transform .15s;transform-origin:bottom center}
+.icnwrap img{width:56px;height:40px;object-fit:contain;display:block}
+.icnwrap:hover{transform:scale(1.15)}
+.icnwrap.sel{transform:scale(1.2);filter:drop-shadow(0 0 6px rgba(214,61,42,.9)) drop-shadow(0 3px 5px rgba(20,30,15,.45))}
+.orden{position:absolute;z-index:2;width:22px;height:22px;border-radius:50%;
+  background:var(--corocora);color:#fff;border:2px solid #fff;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Karla',sans-serif;font-weight:800;font-size:11.5px;
+  box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.leaflet-tooltip.tt{background:var(--tinta);color:#fff;border:none;border-radius:8px;
+  font-family:'Karla',sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;
+  box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.leaflet-tooltip-top.tt::before{border-top-color:var(--tinta)}
+
+/* ---------- Controles del mapa ---------- */
+#mapctl{position:fixed;z-index:1000;left:50%;transform:translateX(-50%);bottom:26px;display:flex;gap:8px;align-items:flex-end}
+#basemaps{display:flex;background:var(--papel);border:1px solid var(--linea);border-radius:12px;
+  overflow:hidden;box-shadow:var(--sombra)}
+#basemaps button{padding:9px 13px;border:none;background:transparent;font:inherit;font-size:12.5px;
+  font-weight:700;color:var(--tinta);cursor:pointer}
+#basemaps button.on{background:var(--tinta);color:#fff}
+.mbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--linea);background:var(--papel);
+  box-shadow:var(--sombra);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--tinta)}
+.mbtn:hover{background:#fff}
+
+/* ---------- Ficha ---------- */
+#ficha{position:fixed;z-index:1100;top:0;right:0;height:100dvh;width:min(430px,100vw);
+  background:var(--papel);box-shadow:-14px 0 40px rgba(20,30,15,.25);
+  transform:translateX(105%);transition:transform .3s cubic-bezier(.32,.72,.32,1);
+  display:flex;flex-direction:column}
+#ficha.abierta{transform:translateX(0)}
+#fichaScroll{overflow-y:auto;flex:1;scrollbar-width:thin}
+#fichaHero{position:relative;height:225px;background:var(--papel-2)}
+#fichaHero img{width:100%;height:100%;object-fit:cover;display:block}
+#fichaHero::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(20,28,15,.62) 0%,transparent 55%)}
+#fichaCerrar{position:absolute;z-index:2;top:12px;right:12px;width:34px;height:34px;border-radius:50%;
+  border:none;background:rgba(253,250,242,.92);color:var(--tinta);font-size:16px;cursor:pointer;
+  box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#fichaTitulo{position:absolute;z-index:2;left:18px;right:56px;bottom:14px;color:#fff}
+#fichaTitulo .badge{--c:#333;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;
+  border-radius:999px;background:var(--c);color:#fff;font-size:11px;font-weight:800;
+  letter-spacing:.08em;text-transform:uppercase}
+#fichaTitulo h2{font-family:'Fraunces',serif;font-weight:650;font-size:23px;line-height:1.1;
+  margin-top:7px;text-shadow:0 2px 10px rgba(0,0,0,.45)}
+#fichaBody{padding:18px}
+#fichaBody .intro{font-size:14.5px;line-height:1.62}
+.acciones{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.acciones a,.acciones button{flex:1;min-width:150px;display:flex;align-items:center;justify-content:center;gap:7px;
+  padding:10px 12px;border-radius:11px;text-decoration:none;font:inherit;font-weight:700;font-size:13.5px;
+  border:1.5px solid var(--tinta);color:var(--tinta);background:transparent;cursor:pointer}
+.acciones .prim{background:var(--tinta);color:#fff}
+.acciones a:hover,.acciones button:hover{filter:brightness(1.12)}
+.seccion{margin-top:24px;padding-top:18px;border-top:1px dashed var(--linea)}
+.seccion h3{font-family:'Fraunces',serif;font-weight:650;font-size:17.5px;display:flex;align-items:center;gap:8px}
+.seccion h3 i{width:10px;height:10px;border-radius:3px;background:var(--acc,var(--sabana));flex:none;transform:rotate(45deg)}
+.seccion p{font-size:14px;line-height:1.62;margin-top:8px}
+.seccion video{width:100%;margin-top:12px;border-radius:12px;background:#0d130a;display:block;aspect-ratio:16/10}
+.galeria{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.galeria img{width:100%;height:130px;object-fit:cover;border-radius:12px;background:var(--papel-2)}
+.galeria img:only-child{grid-column:1/-1;height:170px}
+#fichaBody footer{margin:26px 0 10px;text-align:center;font-size:11.5px;color:#8a927e}
+
+/* Ficha de ruta */
+#fichaBody .rutaMeta{display:flex;gap:16px;margin-top:6px;font-size:13.5px;color:#5d6653}
+#fichaBody .rutaMeta b{color:var(--tinta);font-size:16px}
+.paradas{margin-top:16px;display:flex;flex-direction:column}
+.parada{display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:start;
+  padding:9px 0;cursor:pointer;border:none;background:none;text-align:left;font:inherit;color:inherit}
+.parada:hover b{text-decoration:underline}
+.parada .num{width:24px;height:24px;border-radius:50%;background:var(--corocora);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;position:relative}
+.parada:not(:last-child) .num::after{content:"";position:absolute;top:24px;left:50%;width:2px;height:22px;
+  background:var(--linea);transform:translateX(-50%)}
+.parada b{font-size:14px}
+.parada small{display:block;font-size:11.5px;color:#6b7562;margin-top:1px}
+.aviso{margin-top:14px;padding:10px 12px;border-radius:10px;background:var(--papel-2);
+  font-size:12.5px;line-height:1.5;color:#5d6653}
+
+@media (max-width:720px){
+  #panel{top:10px;left:10px;width:calc(100vw - 20px);max-height:74dvh}
+  #brand{padding:10px 12px}
+  #logo{width:40px;height:40px}
+  #brand .eyebrow{font-size:9.5px}
+  #brand h1{font-size:17px}
+  #brand p{display:none}
+  #brand .horizonte{display:none}
+  #controles{padding:9px 12px 8px}
+  #q{padding:8px 10px 8px 32px;font-size:13.5px}
+  #chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-top:8px;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #chips::-webkit-scrollbar{display:none}
+  .chip{flex:none;white-space:nowrap}
+  #seleccion{margin-top:8px}
+  #lista{min-height:34dvh}
+  #rutaBar{padding:8px 10px}
+  #btnRuta{padding:9px 10px;font-size:13px}
+  #mapctl{left:50%;transform:translateX(-50%);bottom:16px}
+  #ficha{top:auto;bottom:0;right:0;left:0;width:100vw;height:86dvh;
+    border-radius:18px 18px 0 0;transform:translateY(105%)}
+  #ficha.abierta{transform:translateY(0)}
+  #fichaHero{height:185px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important;animation:none !important}
+}
+:focus-visible{outline:2.5px solid var(--corocora);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div id="map" role="application" aria-label="Mapa turístico de San Martín de los Llanos"></div>
+
+<aside id="panel">
+  <div id="brand">
+    <button id="togglePanel" aria-label="Minimizar panel" title="Minimizar / expandir">–</button>
+    <img id="logo" src="https://scontent.fbog3-1.fna.fbcdn.net/v/t39.30808-6/689473597_1084799354721023_5063654735419939594_n.jpg?stp=dst-jpg_tt6&cstp=mx720x720&ctp=s720x720&_nc_cat=108&_nc_map=urlgen_bucketless&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=0Nham2TxIi4Q7kNvwG5bYvV&_nc_oc=AdrME7lwmqhfpnnkNtRnZjQqV1Iw1lqrzl298yYLGhtmtSBigl6uPwfNavgnckvp1bU&_nc_zt=23&_nc_ht=scontent.fbog3-1.fna&_nc_gid=ZkAhzAQQ18GfO6rIli3J3w&_nc_ss=7a2a8&oh=00_AQAMg62TbcvdNRsQGkfLQUCR3lf_4XssQloMb8lqpg1vEg&oe=6A60322E" alt="El Refugio de Algazara" onerror="this.style.display='none'">
+    <div class="titulos">
+      <div class="eyebrow">El Refugio de Algazara</div>
+      <h1>San Martín de los Llanos</h1>
+      <p>Arma tu recorrido por el llano · Meta, Colombia</p>
+    </div>
+    <svg class="horizonte" viewBox="0 0 360 26" preserveAspectRatio="none" aria-hidden="true">
+      <circle cx="315" cy="20" r="11" fill="#f0b34a" opacity=".9"/>
+      <path d="M0 23 Q 90 17 180 21 T 360 20 L360 26 L0 26 Z" fill="#22301d" opacity=".55"/>
+      <path d="M255 8 q3.4 -4 7.5 -.8 q4.1 -3.2 7.5 .8" stroke="#fdfaf2" stroke-width="1.4" fill="none" stroke-linecap="round" opacity=".85"/>
+    </svg>
+  </div>
+  <div id="controles">
+    <div id="buscador">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Buscar un lugar…" aria-label="Buscar un lugar">
+    </div>
+    <div id="chips" role="group" aria-label="Filtrar por categoría"></div>
+    <div id="seleccion">
+      <span><span class="cnt" id="cntSel">0</span> en el mapa</span>
+      <span class="sep"></span>
+      <button id="btnTodos" type="button">Todos</button>
+      <button id="btnNinguno" type="button">Ninguno</button>
+    </div>
+  </div>
+  <div id="lista" aria-label="Lista de lugares"></div>
+  <div id="sinResultados">No encontramos lugares con esa búsqueda.<br>Intenta con otro nombre.</div>
+  <div id="rutaBar">
+    <button id="btnRuta" type="button">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19c3-1 4-3 3-6s0-5 3-6 7-1 10 1"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="8" r="2"/></svg>
+      <span id="btnRutaTxt">Trazar recorrido</span>
+    </button>
+    <button id="btnQuitarRuta" type="button">Quitar</button>
+  </div>
+</aside>
+
+<div id="mapctl">
+  <div id="basemaps">
+    <button id="bmMapa" class="on" type="button">Mapa</button>
+    <button id="bmSat" type="button">Satélite</button>
+  </div>
+  <button class="mbtn" id="btnHome" type="button" title="Ver todo el municipio" aria-label="Ver todo el municipio">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/></svg>
+  </button>
+  <button class="mbtn" id="btnGeo" type="button" title="Mi ubicación" aria-label="Mostrar mi ubicación">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3.2M12 18.8V22M2 12h3.2M18.8 12H22"/></svg>
+  </button>
+</div>
+
+<section id="ficha" aria-label="Ficha del lugar" aria-hidden="true">
+  <div id="fichaScroll">
+    <div id="fichaHero">
+      <img id="fichaImg" alt="">
+      <button id="fichaCerrar" aria-label="Cerrar ficha">✕</button>
+      <div id="fichaTitulo">
+        <span class="badge" id="fichaBadge"></span>
+        <h2 id="fichaNombre"></h2>
+      </div>
+    </div>
+    <div id="fichaBody"></div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+
+const PLACES = [
+ {
+  "nombre": "Escultura Corocora",
+  "coords": [
+   3.7001703838188273,
+   -73.68514900203623
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/01.jpeg",
+  "icono": "https://i.ibb.co/SNxFFDk/Icono1.png",
+  "descripcion": "Esta escultura, realizada por el artista Dario Manrique, es un símbolo de la ciudad. La corocora,  ibis de plunaje escarlata, está presente en el escudo del municipio, en la poesía y la música llanera. Refleja la profunda conexión existente entre la naturaleza y la comunidad local",
+  "texto_1": "Ubicada en la intersección que divide la vía hacia la vereda El Merey y el anillo vial que pasa por el barrio Pedro Daza. Diagonal a ella podemos encontrar la finca La Moneria.",
+  "texto_2": "La escultura de la corocora, un ave de los llanos de Colombia conocida por su plumaje rojo, es un símbolo cultural y natural significativo. Presente en la poesía y música llanera, también es una destacada atracción turística.",
+  "texto_3": "",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/2/20/Corocora_1.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/44/Corocora2.webm/Corocora2.webm.360p.vp9.webm",
+  "video_3": "",
+  "ID": 1,
+  "tipo": "monumento"
+ },
+ {
+  "nombre": "Manga de Coleo",
+  "coords": [
+   3.702777300014904,
+   -73.69052432908678
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/02.jpeg",
+  "icono": "https://i.ibb.co/jwGB7xh/Icono2.png",
+  "descripcion": "La manga de Coleo Hernando Rodríguez Solano, que desde 1979 gracias a la donación del Predio es la sede del club deportivo de coleadores de San Martín y donde se ha formado han formado una de las mejores mangas de coleo del Departamento, espectáculo que en los últimos años ha afianzado el desarrollo turístico de la región",
+  "texto_1": "Ubicada en la vía que conduce al barrio Pedro Daza (Carrera 14). Como puntos de referencia, al frente se encuentra la Plaza de Cuadrillas y, de manera diagonal, el Colintegrado San Martín.",
+  "texto_2": "La manga de coleo es un símbolo cultural de los llaneros en Colombia. Este deporte, donde los jinetes derriban reses a caballo, refleja la habilidad y valentía de los llaneros, y es una tradición celebrada en festivales locales.",
+  "texto_3": "Aquí se realiza la practica y el desarrollo de torneos de Coleo. Este escenario ha sido testigo de torneos nacionales e internacionales del Coleo. ",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/2/20/Ubicacion_Manga_de_Coleo_SM.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c1/Manga_VF.webm/Manga_VF.webm.480p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/72/Manga_de_Coleo_San_Martin_Meta.webm/Manga_de_Coleo_San_Martin_Meta.webm.360p.webm",
+  "ID": 2,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Plaza de Cuadrillas",
+  "coords": [
+   3.7037482930799306,
+   -73.69219355532624
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/03.jpeg",
+  "icono": "https://i.ibb.co/h8Lw0q0/Icono3.png",
+  "descripcion": "La plaza de Cuadrillas Gabino de Balboa en Honor al párroco que en 1735 creó el juego ecuestre de las cuadrillas. Cada año, esta manifestación convoca a 48 jinetes que se dividen en cuatro cuadrillas las cuales representan a cuatro razas que tienen un papel relevante en nuestra historia.",
+  "texto_1": "Tiene su entrada principal por la Calle 16, entre las carreras 11 y 12. También se puede acceder a ella por la vía que conduce al barrio Pedro Daza (Carrera 14). Como puntos de referencia, en la parte trasera se encuentra la manga de coleo y, a un costado, los predios del Colintegrado San Martín.",
+  "texto_2": "Las Cuadrillas de San Martín son una tradición llanera que combina danza y simulacro de combate, representando la convivencia de diferentes culturas en los llanos. Este evento simboliza la historia y promueve valores de convivencia y paz.",
+  "texto_3": "Este es el escenario principal donde se llevan a cabo las cuadrillas de San Martín de los Llanos. Además, ha sido el escenario de numerosos artistas durante festivales pasados. También es un lugar popular para prácticas de fútbol, tardes familiares y eventos como elevar cometas.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/0/06/Ubicacion_de_la_plaza_de_Cuadillas.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/81/Cuadrillas_VF.webm/Cuadrillas_VF.webm.480p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e7/Cuadrillasprincipal.webm/Cuadrillasprincipal.webm.480p.vp9.webm",
+  "ID": 3,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Villa Olimpica",
+  "coords": [
+   3.70546809490371,
+   -73.69765321205153
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/04.jpeg",
+  "icono": "https://i.ibb.co/ZW7mbnb/Icono4.png",
+  "descripcion": "La recien remodela Villa Olimpica (2024) es el escenario para practicar diferentes deportes. Este espacio pensado en el desarrollo de los deportistas que tiene San Martín de los Llanos",
+  "texto_1": "Ubicada en la Calle 17 con Carrera 10a. Como puntos de referencia, al frente se encuentra la plaza de toros. Si seguimos un poco más adelante, muy cerca, encontraremos también el complejo ganadero y el mirador turístico.",
+  "texto_2": "La villa olímpica mejora la infraestructura y deja un legado cultural y deportivo. Los atletas pueden entrenar y competir en diferentes disciplinas preparandose en las mejores condiciones posibles.",
+  "texto_3": "Este espacio es el escenario principal para la práctica de fútbol, patinaje, baloncesto, fútbol playa y atletismo, los deportes más populares en el municipio. Además, es de acceso libre para todo el público.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a5/Ubicacion_Villa_Olimpica_sm.webm/Ubicacion_Villa_Olimpica_sm.webm.360p.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/08/Video_180_de_la_villa_olímpica.webm/Video_180_de_la_villa_olímpica.webm.360p.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/60/Muestra_villa_olimpica_san_martin_de_los_llanos.webm/Muestra_villa_olimpica_san_martin_de_los_llanos.webm.360p.vp9.webm",
+  "ID": 4,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Plaza de Toros",
+  "coords": [
+   3.7043046482924167,
+   -73.6977714900887
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/05.JPG",
+  "icono": "https://i.ibb.co/Qps6Y8V/Icono5.png",
+  "descripcion": "La Plaza de Toros de San Martín de los Llanos, construida con técnicas tradicionales, es un centro cultural y de entretenimiento vital para la comunidad. Además de corridas de toros anteriormente, alberga celebraciones locales y eventos que destacan la cultura y tradiciones de la región.",
+  "texto_1": "Ubicada en la Carrera 11, entre la Calle 17 y la Calle 15. Como puntos de referencia, hacia la Carrera 8, a un costado, se encuentra el complejo ganadero, y hacia la Carrera 10, la Villa Olímpica.",
+  "texto_2": "Muchas plazas de toros, como la Plaza de Toros de San Martín, se utilizan para eventos multifuncionales, convirtiéndose en importantes centros culturales y de entretenimiento para la comunidad.",
+  "texto_3": "Aunque este espacio fue diseñado originalmente para espectáculos de tauromaquia, actualmente se utiliza durante la Semana Santa para representar una obra sobre la vida de Jesús y la historia de esta celebración.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Ubicacion_de_la_plaza_de_toros.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/a/a2/Plaza_de_torres_San_Martin%2C_Meta.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a4/Plaza_de_toros_eventos_san_martin_de_los_llanos.webm/Plaza_de_toros_eventos_san_martin_de_los_llanos.webm.360p.vp9.webm",
+  "ID": 5,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Mirador Turistico",
+  "coords": [
+   3.703209577805647,
+   -73.70086857547665
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/06.JPG",
+  "icono": "https://i.ibb.co/2StP8Nd/Icono6.png",
+  "descripcion": "El mirador Jose Jesus Diaz Rodriguez es una estructura metalica, que anteriormente servia como tanque de almacenamiento de aguas para el municipio y fue adecuado para el disfrute del paisaje sanmartinero. Se construyo en los años 65 y se observa desde alli toda la sabana de San Martín de los llanos ",
+  "texto_1": "Ubicada en la vía principal (Ruta 65) que conecta San Martín con la capital del Meta, Villavicencio. Como puntos de referencia, al frente se encuentra el Hotel Galerón Llanero y, muy cerca, el complejo ganadero.",
+  "texto_2": "La imponente estructura metálica, de aproximadamente 28 metros de altura, se alza en la entrada del municipio, dando la bienvenida a sus visitantes. Alrededor de ella, se pueden encontrar diversos puntos de artesanías.",
+  "texto_3": "El principal atractivo de este lugar es su vista panorámica de 360 grados, que permite apreciar la inmensa llanura que rodea el municipio de San Martín. Además, está rodeado de artesanías y gastronomía del llano y otras regiones. También ha sido escenario de concursos amateur de música y canto.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/5/51/Ubicacion_del_mirador_turistico.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/6/62/MiradorHorizontal.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Vista_360_mirador_turistico.webm",
+  "ID": 6,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Complejo Ganadero",
+  "coords": [
+   3.7021887007601877,
+   -73.70024340116986
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/07.jpeg",
+  "icono": "https://i.ibb.co/MhcWYMy/Icono7.png",
+  "descripcion": "El Complejo Ganadero es un centro vital para la economía y la cultura de San Martín de los Llanos. Este espacio no solo facilita las subastas y la comercialización del ganado, sino que también es un punto de encuentro para la comunidad ganadera. A través de sus actividades, el complejo contribuye a la preservación de las tradiciones locales y al fortalecimiento del patrimonio ganadero de la región.",
+  "texto_1": "Ubicada en la vía principal (Ruta 65) entre la Calle 17 y la Calle 15. Al costado se encuentra la plaza de toros y, si seguimos adelante, la Villa Olímpica. Además, si continuamos hacia la salida del pueblo, encontraremos el mirador turístico.",
+  "texto_2": "El complejo ganadero es esencial, ya que representa la identidad cultural y el desarrollo económico de la región. Facilita la gestión y comercialización del ganado, además de preservar el patrimonio local.",
+  "texto_3": "Aquí se lleva a cabo la subasta ganadera cada miércoles. Actualmente, la subasta está suspendida debido a trabajos de remodelación en la infraestructura.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Ubicacion_del_complejo_ganadero.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Complejo1.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Lote_subasta_ganadera_san_martin_%28muestra%29.webm",
+  "ID": 7,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Plaza de Mercado de San Martín",
+  "coords": [
+   3.694658018526167,
+   -73.69934639597685
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/08.jpg",
+  "icono": "https://i.ibb.co/R4DzPpn/Icono8.png",
+  "descripcion": "La plaza de mercado donde los comerciantes locales ofrecen una variedad de productos frescos y artesanales, reflejando la riqueza agrícola de la región. Además de ser un lugar para la compra y venta, la plaza es un punto de encuentro comunitario donde se preservan y celebran las tradiciones locales a través de sus productos y la interacción diaria entre los habitantes",
+  "texto_1": "Ubicada en la Calle 9 con Carrera 5, comparte la manzana con la terminal de transporte de San Martin. ",
+  "texto_2": "La plaza de mercado sirve como un espacio social de encuentro, y preserva tradiciones culturales en la interaccion del dia a dia de los San martineros. ",
+  "texto_3": "La plaza de San Martín es el lugar donde la comunidad se abastece de una amplia variedad de frutas y verduras provenientes de Colombia y el Llano. Además, se pueden disfrutar de deliciosos desayunos y almuerzos caseros.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/c/c0/Ubicacion_Plaza_de_Mercado.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b5/Plaza_VF.webm/Plaza_VF.webm.480p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/1b/Ubicacion_Plaza_de_Mercado_inside.webm/Ubicacion_Plaza_de_Mercado_inside.webm.720p.vp9.webm",
+  "ID": 8,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Parque Principal",
+  "coords": [
+   3.6912337070813526,
+   -73.69601387248855
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/09.jpeg",
+  "icono": "https://i.ibb.co/THxw1dR/Icono9.png",
+  "descripcion": "El parque se ha mantenido como un lugar vital para el esparcimiento y la convivencia. Ha sido escenario de celebraciones locales, festivales y eventos que destacan la cultura y tradiciones de San Martín de los Llanos.",
+  "texto_1": "Situado entre las Calles 4 y 5, y las Carreras 5 y 6.Este lugar tiene muchos puntos de referencia, entre los más importantes se encuentran: al frente de la iglesia principal por la Carrera 6, la alcaldía municipal por la Carrera 5, y diagonal a El Refugio de Algazara. ",
+  "texto_2": "El parque principal está lleno de árboles de mango, y en el centro hay un gran árbol que cubre toda el área con su sombra. A lo largo de sus caminos, se pueden encontrar diversas esculturas y una fuente. Además, hay carritos que venden helados, raspados y otras cosas refrescantes.",
+  "texto_3": "El parque principal es un lugar de reunión familiar donde se pueden admirar las esculturas que lo rodean. Aquí se realizan eventos artísticos como pintura, música y teatro. Además, durante el Festival Folclórico y Turístico del Llano, se instala la tarima llanera, donde se expone la cultura llanera durante los tres días que dura el festival.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2a/Cambio4_de_camino_camoa.webm/Cambio4_de_camino_camoa.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/18/Cambio_2.webm/Cambio_2.webm.720p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Evento_Parque_Principal.webm",
+  "ID": 9,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "El Refugio de Algazara",
+  "coords": [
+   3.6902998478059823,
+   -73.69598965799628
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/10.jpeg",
+  "icono": "https://i.ibb.co/jD4NDKP/Icono10.png",
+  "descripcion": "Este lugar nace de un grupo musical colombiano de San Martín de los Llanos, amantes de sus raíces, su cultura y su patrimonio. Aquí, se quiere dar una muestra de todos los potenciales culturales y artísticos con las que cuenta San Martín de los Llanos.",
+  "texto_1": "Ubicado en la Carrera 5 con Calle 4. Como puntos de referencia, se encuentra diagonal al parque principal y a una cuadra de la Alcaldía Municipal.",
+  "texto_2": "El Refugio de Algazara es un lugar muy versátil, que cuenta con una biblioteca, un museo, una sala de música, y rincones que nos permiten experimentar el llano. Además, ofrece exposiciones y galerías, entre otras actividades que resaltan la cultura llanera.",
+  "texto_3": "En el Refugio de Algazara se llevan a cabo todo tipo de eventos relacionados con el arte y la cultura, desde talleres de pintura, danza y música. Además, el grupo Algazara muestra su música y talento en este espacio. Este lugar está abierto a todo el público y a los visitantes del municipio.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/3/36/Ubicacion_Algazara.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/17/WEBM_Algazara_02.webm/WEBM_Algazara_02.webm.720p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/4/44/Evento_Refugio_de_Algazzara.webm",
+  "ID": 10,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Iglesia San Martín de Tours",
+  "coords": [
+   3.6917437064305534,
+   -73.69569176129113
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/11.jpeg",
+  "icono": "https://i.ibb.co/gv65spW/Icono11.png",
+  "descripcion": "Por su arquitectura es una de las iglesias más antiguas del departamento del Meta. Su importancia está fundada en la construcción en adobe y madera. A partir de entonces se le aprecia en todo su esplendor el bello maderamen con que esta construida la estructura y el piso nuevo que guarda las características.",
+  "texto_1": "Ubicado en la Carrera 7 con Calle 5. Como puntos de referencia, se encuentra al frente de parque principal y el Hotel Axagua.",
+  "texto_2": "La Iglesia San Martín de Tours en San Martín de los Llanos, Meta, es un símbolo religioso y cultural significativo. Construida en el siglo XVI, es un patrimonio histórico que sirve como centro espiritual para la comunidad y atrae a turistas interesados en su historia y arquitectura.",
+  "texto_3": "La Iglesia de San Martín es un punto de encuentro para feligreses y visitantes, quienes se reúnen tanto por sus creencias como por curiosidad hacia su historia y arquitectura. La iglesia y su entorno destacan por sus obras e infraestructura, atrayendo a todos los que desean admirar su belleza y significado cultural.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/2/26/Ubicación_Iglesia_San_Martin_de_Tours.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/82/Ubicación_Iglesia_San_Martin_de_Tours_y_oratorio.webm/Ubicación_Iglesia_San_Martin_de_Tours_y_oratorio.webm.720p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/7a/Interior_Iglesia_San_Martin_de_Tours.webm/Interior_Iglesia_San_Martin_de_Tours.webm.720p.vp9.webm",
+  "ID": 11,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Concha Acustica",
+  "coords": [
+   3.6921407189871847,
+   -73.69435616164571
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/12.jpg",
+  "icono": "https://i.ibb.co/PjB9TXN/Icono12.png",
+  "descripcion": "En este lugar se encuentra la Casa de la Cultura y diferentes figuras que rinden homenaje a los mitos y leyendas de los llanos orientales, parte de nuestra cultura. También, es el principal escenario de los artistas que participan en el Festival Internacional Folclorico y Turistico del Llano",
+  "texto_1": "Ubicada en la Carrera 7, entre la Calle 5 y la Calle 4. Este lugar se encuentra al frente del Hospital Local por la Calle 4 y a una cuadra del parque principal.",
+  "texto_2": "La concha acustica cuenta con una tarima que ha sido testigo de grandes festivales y de grandes artistas, ademas alrededor de ella se encuentran esparcidad diferentes figuras que representan algunas de las mas famosas leyendas de la cultura llanera y sanmartinera.",
+  "texto_3": "Este lugar es la tarima principal donde se celebra el Festival Internacional Folclórico y Turístico del Llano, además de otros eventos culturales como canto, teatro, baile y más.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/4f/Concha1.webm/Concha1.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/4a/Concha2.webm/Concha2.webm.720p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/5/58/Concierto_Alzate_San_Martin_2020.webm",
+  "ID": 12,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Alcaldia Municipal",
+  "coords": [
+   3.690975427753511,
+   -73.69649899742477
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/13.jpg",
+  "icono": "https://i.ibb.co/nsc5Mmm/Icono13.png",
+  "descripcion": "La Alcaldía Municipal de San Martín de los Llanos, construida con una arquitectura representativa de la región, es el centro administrativo y político de la comunidad. Además de sus funciones gubernamentales, alberga eventos y actividades que promueven la participación ciudadana y el desarrollo cultural de la localidad.",
+  "texto_1": "Ubicada en la Carrera 5 con Calle 5. Como referencia podemos encontrarla al frente del parque principal por la carrera 5 o muy cerca, a un costado de El Refugio de Algazara",
+  "texto_2": "La alcaldía municipal cuenta con pasillos modernos donde sus funcionarios gestionan los recursos públicos en beneficio de la comunidad.",
+  "texto_3": "Aquí se toman las decisiones más importantes para el desarrollo del municipio. Este lugar alberga las oficinas de todas las áreas que administran y gestionan los recursos del municipio.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/3/3a/Ubicacion_alcaldia_san_martin.webm/Ubicacion_alcaldia_san_martin.webm.480p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/af/Corredor_Pasillos_Alcadia_Municipal.webm/Corredor_Pasillos_Alcadia_Municipal.webm.720p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2d/Interior_Alcaldia_Municiapl_SM.webm/Interior_Alcaldia_Municiapl_SM.webm.720p.vp9.webm",
+  "ID": 13,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Biblioteca Publica Municipal",
+  "coords": [
+   3.6911955156655614,
+   -73.69661754575077
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/14.jpg",
+  "icono": "https://i.ibb.co/JzLRLX9/Icono14.png",
+  "descripcion": "Fue creada en junio de 1961. Su estructura tiene valor arquitectónico y por ende forma parte del patrimonio cultural de la Municipalidad.",
+  "texto_1": "Ubicada en la Carrera 5 con Calle 5. Como referencia podemos encontrarla a un lado de la Alcaldia Municipal, al frente del parque principal por la carrera 5 o muy cerca, a un costado de El Refugio de Algazara.",
+  "texto_2": "La biblioteca pública municipal cuenta con espacios donde los usuarios pueden acceder a una  variedad de recursos. Ofrece servicios como áreas de estudio, fomentando la lectura y el aprendizaje en la comunidad.",
+  "texto_3": "La biblioteca pública municipal ofrece préstamo de libros y áreas de estudio. También organiza talleres, conferencias y exposiciones, fomentando la lectura y el aprendizaje en la comunidad.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c8/Cambio1.webm/Cambio1.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/0b/Cambio3.webm/Cambio3.webm.720p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/2/20/Biblioteca_Evento.webm",
+  "ID": 14,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Camino de Piedras",
+  "coords": [
+   3.69067180774352,
+   -73.69808081653058
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/15.jpeg",
+  "icono": "https://i.ibb.co/9qqym6k/Icono15.png",
+  "descripcion": "Estos caminos forman parte del patrimonio cultural local, reflejando tradiciones y técnicas de construcción ancestrales. Además, promueven el turismo y el desarrollo sostenible, al tiempo que refuerzan la identidad del pueblo.",
+  "texto_1": "Ubicada en la calle 5 con carrera 4. Este lugar tiene como referencia la Biblioteca, la Alcaldia Municipal y el Parque Principal que podemos encontrarlos a una cuadra si seguimos estos destinos por la calle 5.",
+  "texto_2": "En el recorrido de este camino, podemos ver casas que conservan la arquitectura colonial, representando un valioso patrimonio histórico y cultural para el municipio de San Martín.",
+  "texto_3": "Aqui se puede disfrutar de un recorrido a pie que conecta con la naturaleza y la belleza del municipio.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/43/Primer_video_Camino_de_piedras_San_Martin_%28Meta%29.webm/Primer_video_Camino_de_piedras_San_Martin_%28Meta%29.webm.360p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/f/fe/Primer_video_ubicacion_Camino_de_piedras_San_Martin_%28Meta%29.webm/Primer_video_ubicacion_Camino_de_piedras_San_Martin_%28Meta%29.webm.480p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/0/07/Recorrido_camno_de_peidras.webm",
+  "ID": 15,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Caño Camoa",
+  "coords": [
+   3.6902408661561763,
+   -73.69986291916057
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/16.jpeg",
+  "icono": "https://i.ibb.co/kghcYfy/Icono16.png",
+  "descripcion": "El caño Camoa es la reserva natural más valiosa de nuestro Municipio por su fuente hídrica​ y su vegetación, cuenta con pozos hermosos que atraen a propios y turistas.",
+  "texto_1": "El caño Camoa se extiende a lo largo de San Martín, pero su entrada más conocida se encuentra en la Calle 6, en dirección a los molinos de arroz. Si seguimos el camino de piedras, llegaremos directamente a él.",
+  "texto_2": "El caño Camoa tiene aguas cristalinas y cuenta con caminos de piedra que conducen a sus diferentes charcos.",
+  "texto_3": "El evento principal de este lugar es disfrutar de las aguas de este caño, refrescarse de estas aguas cristalinas hace conectar con la naturaleza y la belleza del lugar.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b7/Entrada_caño_Camoa.webm/Entrada_caño_Camoa.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/f/fa/Caño_VF.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/13/Primer_video_Caño_Camoa_San_Martin_%28Meta%29.webm/Primer_video_Caño_Camoa_San_Martin_%28Meta%29.webm.480p.vp9.webm",
+  "ID": 16,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Monumento al Cachacero",
+  "coords": [
+   3.698826147842589,
+   -73.69980846941115
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/17.jpeg",
+  "icono": "https://i.ibb.co/DPdhbRx/Icono17.png",
+  "descripcion": "El Monumento al Cachacero en San Martín de los Llanos, hecho de metal, honra a una de las tribus de cuadrilleros. La figura representa a la raza esclava africana, dominada y traída a América por los españoles, y es un símbolo de la rica y compleja historia cultural de la comunidad.",
+  "texto_1": "Ubicada en la vía principal (Ruta 65) que conecta San Martín con la capital del Meta, Villavicencio. Se encuentra muy cerca de la estación de bomberos. Si hemos visitado el mirador turístico y seguimos adentrándonos en el pueblo, la ubicaremos fácilmente.",
+  "texto_2": "El monumento al cachacero se alza en la vía principal de San Martín. A su alrededor, se encuentra el Parque ‘Los Bomberos’, llamado así por su proximidad a la estación de bomberos. También se puede ver el letrero de ‘YO AMO SAN MARTÍN’.",
+  "texto_3": "",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c2/Cachacero.webm/Cachacero.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/d/d3/Cachacero1.webm/Cachacero1.webm.720p.vp9.webm",
+  "video_3": "",
+  "ID": 17,
+  "tipo": "monumento"
+ },
+ {
+  "nombre": "Teatro Camoa",
+  "coords": [
+   3.692770109862158,
+   -73.69558068422681
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/18.jpeg",
+  "icono": "https://i.ibb.co/nDfP64Y/Icono18.png",
+  "descripcion": "El Teatro Camoa abre sus puertas en 1952. Sufre una remodelación total en el año 2019, sus objetos historicos mas valisos fueron recolectados y son mostrados en una especie de museo, su nueva apertura fue el 12 de julio de 2023",
+  "texto_1": "Ubicado en la intersección de la calle 6 con carrera 7. Podemos tener como punto de referencia a este lugar el colegio Cofrem o la concha acústica, que se encuentra a una cuadra por la carrera 7.",
+  "texto_2": "El Teatro Camoa es un símbolo histórico de San Martín de los Llanos, un lugar donde muchos sanmartineros disfrutaron y contribuyeron a su legado. Durante su remodelación, se propuso conservar algunos de los objetos que formaban parte de su patrimonio.",
+  "texto_3": "En el teatro se realizan obras de teatro, conciertos, recitales de poesía, espectáculos de danza y otras presentaciones en vivo. Estos eventos buscan entretener, educar y emocionar al público.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/4/46/UBICAICON_TEOATRO_SM.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/ad/Teatro_Camoa_San_Martin_de_los_Llanos.webm/Teatro_Camoa_San_Martin_de_los_Llanos.webm.240p.vp9.webm",
+  "video_3": "https://upload.wikimedia.org/wikipedia/commons/b/bf/Algazara_Teatro.webm",
+  "ID": 18,
+  "tipo": "turistico"
+ },
+ {
+  "nombre": "Rincon del Tigre",
+  "coords": [
+   3.6905298757932794,
+   -73.6941405577137
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/19.jpeg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/e/ee/El_rincon_del_Tigre_Comida.png",
+  "icono": "https://i.ibb.co/mCqWSHN/Icono19.png",
+  "descripcion": "El Rincón del Tigre es un lugar culturalmente significativo en San Martín de los Llanos. No solo es conocido por su deliciosa comida, sino también por reunir elementos tradicionales de la región. Además, es un punto de encuentro para los mayores representantes del folclore llanero, convirtiéndose en un espacio donde se celebra y preserva la rica herencia cultural de la comunidad",
+  "texto_1": "Está ubicada en la Carrera 7 con Calle 3. Una cuadra abajo de la concha acustica. Es facil ubicarse si encontramos el hospital y seguimos la bajada que llega al barrio El Prado. ",
+  "texto_2": "Este es un lugar ideal para tomar fotografías, explorar rincones llaneros y descubrir artesanías cuadrilleras, además de conocer su historia y tradición. Cada rincón de este sitio busca exportar las artesanías colombianas y la rica cultura llanera.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/0/06/Video_ubicacion_el_rincon_del_tigre.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e1/Video_ubicacion_el_rincon_del_tigre_evento.webm/Video_ubicacion_el_rincon_del_tigre_evento.webm.720p.vp9.webm",
+  "ID": 19,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Don Coctel",
+  "coords": [
+   3.6924966054015065,
+   -73.69486597307396
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/20.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Muestra_de_Don_Coctel_San_Martin.jpg/383px-Muestra_de_Don_Coctel_San_Martin.jpg",
+  "icono": "https://i.ibb.co/Q8fJ8P4/Icono20.png",
+  "descripcion": "Don Coctel es un negocio de cócteles, granizados, cafés y mucho más, ubicado en un encantador ambiente colonial con acceso al parque principal. Este entorno único crea una atmósfera muy agradable y acogedora para los visitantes.",
+  "texto_1": "Está ubicado en la Calle 5 con Carrera 7, frente a la Concha Acústica , muy cerca de la figura de la leyenda de Florentino y el Diablo.",
+  "texto_2": "En Don Coctel, los clientes pueden disfrutar de una variedad de bebidas deliciosas mientras participan en eventos de poesía, canto y otras actividades especiales. Este lugar es perfecto para relajarse y disfrutar de la cultura local en un entorno vibrante y lleno de vida.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f6/Ubicacion_don_coctel_san_martin.webm/Ubicacion_don_coctel_san_martin.webm.360p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/cd/Don_coctel_publicidad.webm/Don_coctel_publicidad.webm.720p.vp9.webm",
+  "ID": 20,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Gastronomía Sanmartinera César Mora",
+  "coords": [
+   3.6904175297383603,
+   -73.69498930447692
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/21.jpeg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Cesar_mora_muestra.jpg",
+  "icono": "https://i.ibb.co/QPnbtXC/Icono21.png",
+  "descripcion": "Gastronomía Sanmartinera Cesar Mora es un lugar dedicado a la venta de comida típica de San Martín de los Llanos, con un enfoque especial en productos hechos con arroz. Este establecimiento ofrece un ambiente acogedor, ideal para disfrutar en familia o con amigos.",
+  "texto_1": "Está ubicado en la Carrera 6 con Calle 3, a media cuadra abajo del parque principal, muy cerca del Hotel Axagua.",
+  "texto_2": "En Gastronomía Sanmartinera Cesar Mora, los visitantes pueden deleitarse con jugosa carne al horno, ya sea de cerdo o de res, o disfrutar de desayunos tradicionales de la región como recomendaciones principales. Este lugar es perfecto para saborear la auténtica cocina sanmartinera y compartir momentos especiales con seres queridos.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/10/360_ubicacion_Cesar_Mora.webm/360_ubicacion_Cesar_Mora.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/3/3d/Muestra_Gastronomia_cesar_mora.webm/Muestra_Gastronomia_cesar_mora.webm.360p.webm",
+  "ID": 21,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Fabrica de Tungos Los Mora",
+  "coords": [
+   3.689562141382791,
+   -73.695470842653
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/22.jpeg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Entrada_fabrica_de_tungo_los_mora.jpg/360px-Entrada_fabrica_de_tungo_los_mora.jpg",
+  "icono": "https://i.ibb.co/PZTZGs8/Icono22.png",
+  "descripcion": "La Fábrica de Tungos Los Mora es un establecimiento tradicional en San Martín de los Llanos, gestionado por la familia Mora, conocida por su producción y exportación de delicias culinarias de la región. Este lugar es famoso por sus productos hechos con arroz, como el pan de arroz, tungos de sal y dulce, harina de arroz y torta de gacho.",
+  "texto_1": "Está ubicado en la Carrera 5 con Calle 2, a una cuadra abajo del parque principal, bajando por El Refugio de Algazara.",
+  "texto_2": "Los visitantes pueden disfrutar de una variedad de productos típicos de San Martín de los Llanos. Este lugar, estrechamente relacionado con Gastronomía Sanmartinera Cesar Mora, ofrece una experiencia auténtica de la cocina local, ideal para quienes desean saborear las tradiciones culinarias de la región.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/6d/Entrada_fabrica_de_tungo_los_mora_280.webm/Entrada_fabrica_de_tungo_los_mora_280.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/6e/Lugar_de_fabrica_de_tungos.webm/Lugar_de_fabrica_de_tungos.webm.360p.webm",
+  "ID": 22,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Delicias Lala",
+  "coords": [
+   3.6940205905414434,
+   -73.69995068391323
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/23.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/9/97/Lala_produccion.jpg",
+  "icono": "https://i.ibb.co/D96QyX4/Icono23.png",
+  "descripcion": "Delicias Lala es un homenaje a las tradiciones culinarias de San Martín de los Llanos, rescatando recetas ancestrales a base de arroz y cuajada. Este lugar rinde tributo a la bisabuela Lala, quien transmitió sus conocimientos y amor por la cocina a las generaciones siguientes. Cada plato es una celebración de la rica herencia gastronómica de la región, manteniendo vivas las costumbres.",
+  "texto_1": "Ubicado en la Calle 14 con Carrera 11, al frente de la cancha de futbol del barrio Maipore,  muy cerca de la plaza de Cuadrillas y la plaza de toros.",
+  "texto_2": "Delicias Lala es el lugar perfecto para disfrutar de la auténtica comida sanmartinera. Aquí puedes encontrar cubas, pan de arroz blando, arroz de leche, torta gacho y masato, entre otras delicias. Es ideal para hacer un recorrido gastronómico y saborear las tradiciones culinarias de San Martín de los Llanos.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/2/2b/Ubicacion_delicias_Lala.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/7/73/Video_delicias_lala.webm",
+  "ID": 23,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Helados Donde Nelcy",
+  "coords": [
+   3.6923712530205655,
+   -73.6997142319947
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/24.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Helados_Doña_Nelcy_muestra.jpg/247px-Helados_Doña_Nelcy_muestra.jpg",
+  "icono": "https://i.ibb.co/sqS3rRd/Icono24.png",
+  "descripcion": "Los Helados Donde Nelcy es un lugar familiar ideal para disfrutar de un helado en una tarde calurosa. Su especialidad es el helado de leche con Pony Malta, hecho con leche de vaca local. La receta, perfeccionada por la madre de Doña Nelcy, ha convertido este rincón en un símbolo de tradición y sabor en San Martín.",
+  "texto_1": "Ubicado en la Carrera 3 con Calle 7, muy cerca del Caño Camoa y por la carrera 3, cerca de la Plaza de San Martín.",
+  "texto_2": "Los Helados Donde Nelcy es un lugar muy familiar, ideal para compartir una tarde calurosa disfrutando de un helado de leche con una mezcla única de Pony Malta, una especialidad que solo se encuentra aquí.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/d/d3/Ubicaicon_Helados_Donde_Nelcy.webm/Ubicaicon_Helados_Donde_Nelcy.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/01/Ambiente_Helados_donde_Nelcy.webm/Ambiente_Helados_donde_Nelcy.webm.360p.webm",
+  "ID": 24,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Pan de Arroz Los Fundadores",
+  "coords": [
+   3.6927424038535026,
+   -73.69445303128386
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/25.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Muestra_gastronomica_pan_de_arroz_los_fundadores.jpg/384px-Muestra_gastronomica_pan_de_arroz_los_fundadores.jpg",
+  "icono": "https://i.ibb.co/23tWbQx/Icono25.png",
+  "descripcion": "Pan de Arroz Los Fundadores es un establecimiento emblemático en San Martín de los Llanos, conocido por su especialidad en pan de arroz. Liderado por Gloria Trigos, miembro de una familia famosa por su tradición en recetas sanmartineras, este lugar preserva y celebra la rica herencia culinaria de la región.",
+  "texto_1": "Ubicado en la Calle 5 con Carrera 8, frente a la concha acústica, específicamente en el área de izaje de banderas.",
+  "texto_2": "En Pan de Arroz Los Fundadores, los visitantes pueden disfrutar de una variedad de productos tradicionales, con un enfoque especial en el pan de arroz. Este lugar es ideal para quienes desean saborear auténticas delicias sanmartineras, elaboradas con recetas transmitidas de generación en generación.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/9/98/Video_360_ubicacion_pan_de_arroz_los_fundadores.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a4/Publicidad_pan_de_arroz_los_fundadores.webm/Publicidad_pan_de_arroz_los_fundadores.webm.720p.vp9.webm",
+  "ID": 25,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Upa Llano",
+  "coords": [
+   3.691536575701266,
+   -73.69561497879238
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/26.jpeg",
+  "icono": "https://i.ibb.co/NrfFrqz/Icono26.png",
+  "descripcion": "Upa Llano es una marca de ropa y accesorios originaria de San Martín de los Llanos. Con el lema “No cambiamos la cultura, mostramos otra perspectiva”, la marca se dedica a resaltar el orgullo de ser llanero y a representar las costumbres de la región a través de sus diseños.",
+  "texto_1": "Está ubicada en la Carrera 6, entre la Calle 4 y la Calle 5. Al frente se encuentra el parque principal, y en la misma cuadra están la iglesia principal, Hotel Axagua y Artesanias Los Cafuches.",
+  "texto_2": "En Upa Llano, los clientes pueden encontrar una variedad de ropa, gorras y accesorios modernos que mantienen la esencia de los llaneros. Cada año, la marca lanza una colección representativa para las Cuadrillas de San Martín, celebrando esta importante tradición cultural con estilo y autenticidad.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c5/360_ubicacion_UPA_LLANO.webm/360_ubicacion_UPA_LLANO.webm.480p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/74/Video_promocional_upa_llano.webm/Video_promocional_upa_llano.webm.360p.webm",
+  "ID": 26,
+  "tipo": "artesanos"
+ },
+ {
+  "nombre": "Taller Dario Manrique",
+  "coords": [
+   3.690073897603021,
+   -73.69509411673843
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/27.jpeg",
+  "icono": "https://i.ibb.co/JpYsr9q/Icono27.png",
+  "descripcion": "El taller de Darío Manrique, un cuadrillero de la tribu de los Moros, es un maestro de la soldadura. En su taller, ha dado vida a esculturas emblemáticas del municipio, como la corocora y el sombrero de guahibo. Estas obras, todas hechas de metal mediante técnicas de soldadura, se han convertido en verdaderas piezas de arte que reflejan la rica herencia cultural de San Martín de los Llanos.",
+  "texto_1": "Ubicado en la Calle 3 con Carrera 5, muy cerca de El Refugio de Algazara y a una cuadra del parque principal.",
+  "texto_2": "Aquí es donde se han creado algunas de las esculturas que podemos encontrar en el municipio, como la corocora y el sombrero de guahibo. Todas estas obras, hechas de metal mediante técnicas de soldadura, se han convertido en verdaderas piezas de arte.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/1e/Ubicacion_Taller_Dario_Manrique.webm/Ubicacion_Taller_Dario_Manrique.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/d/d1/Obras_Dario_Manrique.webm/Obras_Dario_Manrique.webm.480p.vp9.webm",
+  "ID": 27,
+  "tipo": "artesanos"
+ },
+ {
+  "nombre": "Artesanias Los Cafuches",
+  "coords": [
+   3.6912031020961464,
+   -73.6953742711114
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/28.jpeg",
+  "icono": "https://i.ibb.co/P6gFRvQ/Icono28.png",
+  "descripcion": "Artesanías Los Cafuches es un destino perfecto para los amantes de la fotografía y la exploración cultural. Aquí, los visitantes pueden descubrir auténticas artesanías cuadrilleras y sumergirse en la historia y tradiciones de San Martín de los Llanos. Cada rincón del lugar está dedicado a promover y exportar las artesanías colombianas, celebrando la rica cultura llanera en cada detalle.",
+  "texto_1": "Está ubicada en la Carrera 6, entre la Calle 4 y la Calle 5. Al frente se encuentra el parque principal, y en la misma cuadra están la iglesia principal, Upa Llano y el Hotel Axagua.",
+  "texto_2": "Este es un lugar ideal para tomar fotografías, explorar rincones llaneros y descubrir artesanías cuadrilleras, además de conocer su historia y tradición. Cada rincón de este sitio busca exportar las artesanías colombianas y la rica cultura llanera.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/43/Video_ubicacion_artesanias_los_cafuches.webm/Video_ubicacion_artesanias_los_cafuches.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b0/Video_inside_artesanias_los_cafuches.webm/Video_inside_artesanias_los_cafuches.webm.720p.vp9.webm",
+  "ID": 28,
+  "tipo": "artesanos"
+ },
+ {
+  "nombre": "Hotel Doña Hilda",
+  "coords": [
+   3.69125094274626,
+   -73.69508747155382
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/29.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Hotel_doña_hilda_muestra.jpg/384px-Hotel_doña_hilda_muestra.jpg",
+  "icono": "https://i.ibb.co/RCkxmnT/Icono29.png",
+  "descripcion": "Bienvenidos al Hotel Doña Hilda, un oasis de tranquilidad y elegancia en el corazón de San Martín de los Llanos. Nuestro hotel boutique, alojado en una hermosa casa colonial de estructura antigua, ofrece una experiencia única y auténtica. Nuestro servicio de café y bar ofrece una variedad de bebidas frías y calientes, así como cocteles exquisitos para deleitar sus sentidos. Permítanos transportarlo a una época de encanto y sofisticación, mientras disfruta de la hospitalidad y el confort que solo el Hotel Doña Hilda puede ofrecer.",
+  "texto_1": "Está ubicado en la Carrera 6 con Calle 4, en la cuadra entre el parque principal y la Concha Acústica.",
+  "texto_2": "En el Hotel Doña Hilda, los visitantes pueden disfrutar de comidas deliciosas, espacios confortables y habitaciones bien equipadas. Este hotel es un refugio de tranquilidad, donde cada detalle está pensado para brindar una estancia memorable y relajante.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/d/da/Hotel_Doña_Hilda.webm/Hotel_Doña_Hilda.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/b/b2/Hotel_Doña_hilda.webm",
+  "ID": 29,
+  "tipo": "hospedaje"
+ },
+ {
+  "nombre": "Hotel Axagua",
+  "coords": [
+   3.6913483667255362,
+   -73.69546916580865
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/30.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Hotel_axagua_muestra.jpg/384px-Hotel_axagua_muestra.jpg",
+  "icono": "https://i.ibb.co/RvcgbLK/Icono30.png",
+  "descripcion": "El Hotel Axagua está ubicado en una antigua casona de interés cultural en San Martín de los Llanos, Meta. La casona ha sido restaurada para preservar su esencia original, ofreciendo un lugar cómodo y moderno para los huéspedes. Combina el encanto histórico con las comodidades actuales.",
+  "texto_1": "Está ubicada en la Carrera 6, entre la Calle 4 y la Calle 5. Al frente se encuentra el parque principal, y en la misma cuadra están la iglesia principal, Upa Llano y Artesanias Los Cafuches.",
+  "texto_2": "Aqui, se puede disfrutar de comidas exquisitas, lugares confortables y habitaciones de lujo. Ubicado en el corazón del exuberante paisaje del Meta, este hotel boutique es un oasis de tranquilidad y elegancia. Cada detalle está pensado para ofrecer una experiencia única, reflejando un compromiso con la excelencia y la hospitalidad.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/bc/Ubicacion_axagua_san_martin.webm/Ubicacion_axagua_san_martin.webm.720p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/transcoded/3/32/Hotel_axagua_publicidad.webm/Hotel_axagua_publicidad.webm.720p.vp9.webm",
+  "ID": 30,
+  "tipo": "hospedaje"
+ },
+ {
+  "nombre": "Hotel Gabino de Balboa",
+  "coords": [
+   3.694020783850212,
+   -73.69776235266323
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/31.jpeg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/b/be/Gabino_de_balboa_interior.jpg",
+  "icono": "https://i.ibb.co/x5pFs6Z/Icono31.png",
+  "descripcion": "El Hotel Gabino de Balboa, , ofrece una experiencia única con su temática de las Cuadrillas sanmartineras. Este hotel invita a los huéspedes a conectarse más profundamente con el municipio y a conocer de cerca las cuadrillas, un patrimonio cultural y el mayor orgullo de San Martín.",
+  "texto_1": "Ubicado en la Calle 8 con Carrera 5, A una cuadra de la plaza de Mercado. Muy cerca de los helados donde Nelcy y Cosechas.",
+  "texto_2": " Los visitantes pueden sumergirse en la rica tradición de las Cuadrillas sanmartineras. El hotel no solo proporciona alojamiento cómodo, sino que también ofrece una oportunidad para vivir y aprender sobre esta importante tradición cultural, haciendo de cada estancia una experiencia enriquecedora y memorable.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a0/360_ubicacion_Gabino_de_Balboa.webm/360_ubicacion_Gabino_de_Balboa.webm.480p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/b/b5/Publicidad_Gabino_de_balboa.webm",
+  "ID": 31,
+  "tipo": "hospedaje"
+ },
+ {
+  "nombre": "Exoticos Orinatu",
+  "coords": [
+   3.6927553385760916,
+   -73.6928154839555
+  ],
+  "imagen": "https://upload.wikimedia.org/wikipedia/commons/3/36/Exoticos_frutos.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/3/36/Exoticos_frutos.jpg",
+  "icono": "https://i.ibb.co/g48pXGG/Icono32.png",
+  "descripcion": "Exóticos es una empresa familiar que inicia en el año 2018 en San Martín de los Llanos brindando una experiencia única y desconocida de las frutas nativas en sus diferentes formas colores aromas combinación de sabores ácido dulce agridulce con un alto valor nutritivo",
+  "texto_1": "Ubicado en la Calle 4 con Carre 9. Muy cerca de la Concha Acustica y el Hospital, en dirección hacia el cementerio y la vereda el Merey",
+  "texto_2": "Nos comprometemos a rescatar y compartir la herencia cultural de los Llanos Orientales. Con cada uno de nuestros jugos, helados y batidos, buscamos revivir el Pepeo Sanmartinero, una tradición que refleja el espíritu de nuestra región. Ven y celebra con nosotros el orgullo de nuestras raíces, saboreando lo mejor de lo que la Orinoquía tiene para ofrecer en cada bocado.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/7/75/Ubicación_exoticos.webm/Ubicación_exoticos.webm.480p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Video_publicitario_Exoticos_SDan_Martin.webm",
+  "ID": 32,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Caffeta Colombia",
+  "coords": [
+   3.702954314871631,
+   -73.70076567174522
+  ],
+  "imagen": "https://lh5.googleusercontent.com/p/AF1QipPV3_A_YzBuoSvYxiofXBqSmmhV1aYu81Jjekxl=w600-h485-p-k-no",
+  "imagen2": "https://lh5.googleusercontent.com/p/AF1QipOwZZG8EZxTP5tg5mBbIw4hGM6n9Ox_KvqHHDPW=w600-h988-p-k-no",
+  "icono": "https://i.ibb.co/bKH9cqQ/Icono33.png",
+  "descripcion": "En nuestro espacio, recogemos la esencia de la experiencia cafetera del Llano, trabajando de la mano con los agricultores locales para ofrecer lo mejor del café de nuestra región. Cada taza refleja el esfuerzo y la dedicación de quienes cultivan y cosechan este tesoro de nuestra tierra, compartiendo la cultura y las tradiciones del territorio en cada una de nuestras preparaciones.",
+  "texto_1": "Ubicado debajo del mirador turistico, en la vía principal (Ruta 65) que conecta San Martín con la capital del Meta, Villavicencio. Como puntos de referencia, al frente se encuentra el Hotel Galerón Llanero y, muy cerca, el complejo ganadero.",
+  "texto_2": "Con Corazón de Llano, olor a café, te invitamos a vivir una experiencia sensorial única, donde el aroma del café fresco se mezcla con el espíritu del Llano. Cada sorbo es una invitación a conectar con nuestras raíces y a disfrutar de la calidez de un café que no solo nutre el cuerpo, sino también el alma.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/5/51/Ubicacion_del_mirador_turistico.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/7/75/%40sanmartindelosllanosaldia6_sangria_disfrutalavida.webm",
+  "ID": 33,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "El Zanguan de Felipe",
+  "coords": [
+   3.694204796845834,
+   -73.69531594341198
+  ],
+  "imagen": "https://upload.wikimedia.org/wikipedia/commons/2/23/Zanguan_1.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/9/92/Zanguan_2.jpg",
+  "icono": "https://i.ibb.co/RNdm4wC/Icono34.png",
+  "descripcion": " Zaguán de Felipe es un espacio encantador que invita a sumergirse en una experiencia única. Atendido con esmero por su propietario, Felipe Vega, este lugar cuenta con una arquitectura inspirada en la rica herencia libanesa, llena de detalles coloridos y encantadores. Cada rincón del zaguán refleja un espíritu acogedor y una atmósfera cálida, ideal para pasar momentos inolvidables. Su ambientación y diseño nos transportan a una mezcla de tradición y modernidad, donde el entorno se convierte en el protagonista de una experiencia multisensorial.",
+  "texto_1": "Ubicado en la Carrera 7 con Calle 8, muy cerca de la Concha Acustica, especificamente a dos cuadras. Tambien se encuentra muy cerca el Teatro Camoa.",
+  "texto_2": "En El Zaguán de Felipe, la diversión y la buena compañía están garantizadas. Este gastro bar no solo es perfecto para disfrutar de una buena charla entre amigos, sino también para saborear deliciosos platos y bebidas cuidadosamente seleccionadas. La combinación de exquisita comida, bebidas refrescantes y el ambiente relajado lo hacen ideal para una velada inolvidable. Aquí, los juegos de mesa y las conversaciones animadas fluyen en un entorno diseñado para desconectarse y pasarla bien. Es el lugar perfecto para quienes buscan compartir momentos especiales en buena compañía y en un ambiente único.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e6/Ubicación_zanguan.webm/Ubicación_zanguan.webm.480p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/2/21/Video_del_Zanguan_de_Felipe.webm",
+  "ID": 34,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Hotel Reserva Manacacias",
+  "coords": [
+   3.6939756922956173,
+   -73.69708931683016
+  ],
+  "imagen": "https://upload.wikimedia.org/wikipedia/commons/b/be/Reserva_mancacias.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/5/51/Reserva_2.jpg",
+  "icono": "https://i.ibb.co/GF2nvfx/Icono35.png",
+  "descripcion": "Ubicado en el corazón de San Martín, Meta, el Hotel Reserva Manacacías rinde homenaje al impresionante Parque Nacional Natural Serranía de Manacacías, un símbolo de riqueza y biodiversidad en la región de la Orinoquía. Este destino natural es un refugio de flora y fauna que ofrece una experiencia única en el corazón de la selva tropical, permitiendo a los visitantes conectar con la belleza y la magia de la región.",
+  "texto_1": "Ubicado en la Carrera 6 con Calle 7, en el centro de San Martìn. Se encuenta a unos pasos del Parque y la Iglesia principal. Toda esta zona es un alto afluente turistico ya que recolecta valor historico para nuestro municipio.",
+  "texto_2": "Nuestro hotel combina confort y tradición en un entorno culturalmente vibrante. Ofrecemos habitaciones con ventilador o aire acondicionado, servicio de piscina, WiFi gratuito, televisión y cafetería, garantizando una estancia cómoda y placentera. Cada detalle está pensado para brindarte una experiencia cálida y acogedora, con el calor de hogar que hará de tu visita algo inolvidable.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/3/3d/Ubicacion_reserva_manacacioas.webm/Ubicacion_reserva_manacacioas.webm.480p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/e/e1/Video_publicidad_reserve_manacacias.webm",
+  "ID": 35,
+  "tipo": "hospedaje"
+ },
+ {
+  "nombre": "Hotel River Side",
+  "coords": [
+   3.6967613277657683,
+   -73.6979278258366
+  ],
+  "imagen": "https://upload.wikimedia.org/wikipedia/commons/b/b7/Rivernoche_side.jpg",
+  "imagen2": "https://www.hotelriversidesanmartin.com/gallery_gen/204a5a1ac2e4cba2aa24aa6e2558d1a4_874x672_fit.jpg?ts=1729557073",
+  "icono": "https://i.ibb.co/PhF6cBz/Icono36.png",
+  "descripcion": "¡Descubre el encanto del Hotel River Side en San Martín Meta! Con más de 7 años de experiencia, ofrecemos una estancia de primer nivel en el municipio turístico más antiguo de la Orinoquia. Perfecto para relajarse o asuntos empresariales. ¡Te esperamos!",
+  "texto_1": "Ubicado en la carrera 7 con calle 10, a una cuadra del unico semaforo que existe en San Martin de los llanos. Este hotel es uno de los que te da la bienvenida a San Martin, muy cerca al monumento del Cachacero",
+  "texto_2": "El Hotel River Side destaca por su servicio al cliente empresarial, con internet rápido 24/7, respaldo de energía para asegurar continuidad en cortes de luz y herramientas para labores corporativas. También es un lugar de encuentro para figuras importantes de la cultura local, apoyando el desarrollo de la comunidad.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/b/bd/Video_ubicacion_de_River_Side.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/8/8f/Interior_de_River_Side.webm",
+  "ID": 36,
+  "tipo": "hospedaje"
+ },
+ {
+  "nombre": "Hacienda La Macarena",
+  "coords": [
+   3.6862441950736553,
+   -73.70789686623534
+  ],
+  "imagen": "https://www.haciendalamacarena.com/wp-content/uploads/2023/05/conocenos.png",
+  "imagen2": "https://www.haciendalamacarena.com/wp-content/uploads/2023/05/Instagram-Hacienda-La-Macarena8.png",
+  "icono": "https://i.ibb.co/94Gm2h7/Icono37.png",
+  "descripcion": "Ganadería Hacienda La Macarena, fundada en 1960 en Puerto Antioquia, evolucionó de una ganadería comercial a una ganadería pura en 1973 en Caucasia, Antioquia, y luego se trasladó a San Martín, Meta, en 1982. Con más de medio siglo de experiencia en la mejora de la raza Brahmán, utiliza toros de linajes prestigiosos como J.D. Hudgins y V8 Ranch. Además, ha incursionado en la siembra de girasol, creando un hermoso jardín que promueve el agroturismo y la cultura llanera, ofreciendo a los visitantes una experiencia única de paz y belleza natural.",
+  "texto_1": "Ubicado en el Km 1 Vía a Granada desde San Martín. Se puede llegar a este lugar siguiendo la Ruta Nacional 65.",
+  "texto_2": "Aquí puedes disfrutar de dos actividades agroturísticas: una caminata al campo de girasoles, que incluye visitas a un establo de ganadería Brahmán, una granja con animales menores, un estanque de mojarras y un sendero ecológico, y una cabalgata de 45 minutos en plena naturaleza. También ofrecen un restaurante campestre con reserva anticipada y son 100% pet-friendly. Para más información, puedes contactar al 3176350076.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a0/Lugar_hacienda_la_macarena.webm/Lugar_hacienda_la_macarena.webm.360p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/b/b5/Descripcion_hacienda_la_macarena.webm",
+  "ID": 37,
+  "tipo": "gastronomico"
+ },
+ {
+  "nombre": "Hotel Royal Park",
+  "coords": [
+   3.6990151032016176,
+   -73.6996443035614
+  ],
+  "imagen": "https://raw.githubusercontent.com/diemgood/AlgazaraMapa/refs/heads/main/img/38.jpg",
+  "imagen2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Royalpark2.jpg/320px-Royalpark2.jpg",
+  "icono": "https://i.ibb.co/Lzx0GHj1/Icono38.png",
+  "descripcion": "el Hotel Royal Park combina comodidad y calidad para brindar una experiencia inolvidable. Situado estratégicamente frente al monumento del Cachacero, este hotel es el punto de partida ideal para descubrir la riqueza cultural y natural de la región. Con un ambiente acogedor y un servicio excepcional, ofrecemos a nuestros huéspedes un refugio de tranquilidad en medio de los vibrantes paisajes llaneros.",
+  "texto_1": "Ubicado a pocos metros de la entrada de San Martín de los Llanos, sobre la vía nacional que conduce a Villavicencio. Situado frente al emblemático monumento del Cachacero.",
+  "texto_2": " Con un ambiente acogedor y un servicio excepcional, ofrecen a sus huéspedes un refugio de tranquilidad en medio de los vibrantes paisajes llaneros. Ya sea para disfrutar de un descanso placentero o explorar las tradiciones del Llano, en el Hotel Royal Park encontrará el equilibrio perfecto entre confort y autenticidad.",
+  "video_1": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a0/Lugar_hacienda_la_macarena.webm/Lugar_hacienda_la_macarena.webm.360p.vp9.webm",
+  "video_2": "https://upload.wikimedia.org/wikipedia/commons/b/b5/Descripcion_hacienda_la_macarena.webm",
+  "ID": 38,
+  "tipo": "hospedaje"
+ }
+];
+
+const CATS = {
+  monumento:   { label:"Monumentos",        color:"#d63d2a" },
+  turistico:   { label:"Sitios turísticos", color:"#2f7a4b" },
+  gastronomico:{ label:"Gastronomía",       color:"#dd8624" },
+  hospedaje:   { label:"Hospedaje",         color:"#2e6f92" },
+  artesanos:   { label:"Artesanos",         color:"#7a58a8" }
+};
+
+/* ---------- Mapa base ---------- */
+const map = L.map("map", { zoomControl:false, attributionControl:true })
+  .setView([3.6975, -73.6955], 15);
+L.control.zoom({ position:"bottomright" }).addTo(map);
+
+const capaMapa = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  maxZoom: 20,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+}).addTo(map);
+const capaSat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 19,
+  attribution: "Tiles &copy; Esri — Maxar, Earthstar Geographics"
+});
+document.getElementById("bmMapa").addEventListener("click", () => cambiarBase("mapa"));
+document.getElementById("bmSat").addEventListener("click", () => cambiarBase("sat"));
+function cambiarBase(cual){
+  const esSat = cual === "sat";
+  if (esSat){ map.removeLayer(capaMapa); capaSat.addTo(map); }
+  else { map.removeLayer(capaSat); capaMapa.addTo(map); }
+  document.getElementById("bmMapa").classList.toggle("on", !esSat);
+  document.getElementById("bmSat").classList.toggle("on", esSat);
+}
+
+/* ---------- Marcadores (iconos originales) ---------- */
+const marcadores = {};
+const grupo = L.featureGroup().addTo(map);
+
+PLACES.forEach(p => {
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="icnwrap" id="icn-${p.ID}"><img src="${p.icono}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{style:'width:26px;height:26px;margin:7px auto;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${CATS[p.tipo].color};border:2px solid #fff'}))"></div>`,
+    iconSize: [56, 40],
+    iconAnchor: [28, 36],
+    tooltipAnchor: [0, -34]
+  });
+  const m = L.marker(p.coords, { icon, keyboard:true, title:p.nombre, riseOnHover:true });
+  m.bindTooltip(p.nombre, { direction:"top", className:"tt", opacity:1 });
+  m.on("click", () => abrirFicha(p.ID));
+  marcadores[p.ID] = m;
+  m.addTo(grupo);
+});
+
+const vistaInicial = grupo.getBounds().pad(0.12);
+map.fitBounds(vistaInicial);
+document.getElementById("btnHome").addEventListener("click", () => {
+  cerrarFicha();
+  map.flyToBounds(vistaInicial, { duration:.8 });
+});
+
+/* ---------- Estado: filtros, búsqueda y selección ---------- */
+const estado = {
+  cat:"todos",
+  q:"",
+  sel: new Set(PLACES.map(p => p.ID))   /* al abrir, todos seleccionados */
+};
+const norm = s => (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+
+const chipsEl = document.getElementById("chips");
+function pintarChips(){
+  let html = `<button class="chip ${estado.cat==="todos"?"on":""}" data-cat="todos" style="--c:#22301d">
+    <span class="dot"></span>Todos <span class="n">${PLACES.length}</span></button>`;
+  for (const [k,v] of Object.entries(CATS)){
+    const n = PLACES.filter(p=>p.tipo===k).length;
+    html += `<button class="chip ${estado.cat===k?"on":""}" data-cat="${k}" style="--c:${v.color}">
+      <span class="dot"></span>${v.label} <span class="n">${n}</span></button>`;
+  }
+  chipsEl.innerHTML = html;
+}
+chipsEl.addEventListener("click", e => {
+  const b = e.target.closest(".chip");
+  if (!b) return;
+  estado.cat = b.dataset.cat;
+  pintarChips(); refrescar(true);
+});
+document.getElementById("q").addEventListener("input", e => {
+  estado.q = norm(e.target.value.trim());
+  refrescar(false);
+});
+
+/* lugares que pasan el filtro de categoría + búsqueda (lo que se ve en la lista) */
+function enLista(){
+  return PLACES.filter(p =>
+    (estado.cat === "todos" || p.tipo === estado.cat) &&
+    (!estado.q || norm(p.nombre).includes(estado.q) || norm(p.descripcion).includes(estado.q))
+  );
+}
+/* lugares visibles en el mapa = seleccionados (la selección manda) */
+function enMapa(){ return PLACES.filter(p => estado.sel.has(p.ID)); }
+
+const listaEl = document.getElementById("lista");
+function refrescar(volar){
+  const lista = enLista();
+  const idsMapa = new Set(estado.sel);
+
+  for (const p of PLACES){
+    const m = marcadores[p.ID];
+    if (idsMapa.has(p.ID)) { if (!grupo.hasLayer(m)) m.addTo(grupo); }
+    else { grupo.removeLayer(m); }
+  }
+
+  listaEl.innerHTML = lista.map(p => `
+    <div class="tarjeta ${estado.sel.has(p.ID)?"":"apagada"}" data-id="${p.ID}" id="card-${p.ID}" tabindex="0" role="button" aria-label="${p.nombre}">
+      <input type="checkbox" data-check="${p.ID}" ${estado.sel.has(p.ID)?"checked":""} aria-label="Incluir ${p.nombre} en el mapa">
+      <img src="${p.imagen}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <span><b>${p.ID}. ${p.nombre}</b>
+      <small><i style="background:${CATS[p.tipo].color}"></i>${CATS[p.tipo].label}</small></span>
+    </div>`).join("");
+
+  document.getElementById("sinResultados").style.display = lista.length ? "none" : "block";
+  document.getElementById("cntSel").textContent = estado.sel.size;
+
+  const btn = document.getElementById("btnRuta");
+  btn.disabled = estado.sel.size < 2;
+  document.getElementById("btnRutaTxt").textContent =
+    estado.sel.size < 2 ? "Trazar recorrido (elige 2+)" : `Trazar recorrido (${estado.sel.size})`;
+
+  if (ruta.activa) quitarRuta();
+
+  if (volar && estado.sel.size){
+    const b = L.featureGroup(enMapa().map(p=>marcadores[p.ID])).getBounds().pad(0.15);
+    map.flyToBounds(b, { duration:.7, maxZoom:17 });
+  }
+}
+
+listaEl.addEventListener("click", e => {
+  const chk = e.target.closest("input[data-check]");
+  if (chk){
+    const id = +chk.dataset.check;
+    chk.checked ? estado.sel.add(id) : estado.sel.delete(id);
+    refrescar(false);
+    return;
+  }
+  const t = e.target.closest(".tarjeta");
+  if (t) abrirFicha(+t.dataset.id);
+});
+listaEl.addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target.classList.contains("tarjeta"))
+    abrirFicha(+e.target.dataset.id);
+});
+
+/* Todos / Ninguno actúan sobre lo que muestra la lista (respetando el filtro activo) */
+document.getElementById("btnTodos").addEventListener("click", () => {
+  enLista().forEach(p => estado.sel.add(p.ID));
+  refrescar(true);
+});
+document.getElementById("btnNinguno").addEventListener("click", () => {
+  if (estado.cat === "todos" && !estado.q) estado.sel.clear();
+  else enLista().forEach(p => estado.sel.delete(p.ID));
+  refrescar(false);
+});
+
+document.getElementById("togglePanel").addEventListener("click", () => {
+  document.getElementById("panel").classList.toggle("mini");
+});
+
+/* ---------- Recorrido (ruta con los seleccionados) ---------- */
+const ruta = { activa:false, linea:null, badges:[], orden:[] };
+
+function havKm(a, b){
+  const R = 6371, rad = x => x*Math.PI/180;
+  const dLat = rad(b[0]-a[0]), dLon = rad(b[1]-a[1]);
+  const s = Math.sin(dLat/2)**2 + Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+function ordenarParadas(pts){
+  const n = pts.length;
+  if (n <= 2) return pts.map((_,i)=>i);
+  const D = pts.map(a => pts.map(b => havKm(a.coords, b.coords)));
+  let mejor = null, mejorD = Infinity;
+  for (let ini = 0; ini < n; ini++){           /* vecino más cercano desde cada inicio */
+    const orden = [ini], usados = new Set([ini]);
+    let d = 0;
+    while (orden.length < n){
+      const ult = orden[orden.length-1];
+      let sig = -1, sd = Infinity;
+      for (let j = 0; j < n; j++)
+        if (!usados.has(j) && D[ult][j] < sd){ sd = D[ult][j]; sig = j; }
+      orden.push(sig); usados.add(sig); d += sd;
+    }
+    if (d < mejorD){ mejorD = d; mejor = orden; }
+  }
+  let mejora = true;                            /* 2-opt */
+  while (mejora){
+    mejora = false;
+    for (let i = 0; i < n-2; i++){
+      for (let k = i+1; k < n-1; k++){
+        const a=mejor[i], b=mejor[i+1], c=mejor[k], d2=mejor[k+1];
+        if (D[a][c] + D[b][d2] < D[a][b] + D[c][d2] - 1e-9){
+          mejor = mejor.slice(0,i+1).concat(mejor.slice(i+1,k+1).reverse(), mejor.slice(k+1));
+          mejora = true;
+        }
+      }
+    }
+  }
+  return mejor;
+}
+
+document.getElementById("btnRuta").addEventListener("click", trazarRuta);
+document.getElementById("btnQuitarRuta").addEventListener("click", () => { quitarRuta(); cerrarFicha(); });
+
+function trazarRuta(){
+  quitarRuta();
+  const pts = enMapa();
+  if (pts.length < 2) return;
+  const orden = ordenarParadas(pts).map(i => pts[i]);
+
+  let km = 0;
+  for (let i = 0; i < orden.length-1; i++) km += havKm(orden[i].coords, orden[i+1].coords);
+  const kmCalle = km * 1.3;   /* factor aproximado por cuadrícula de calles */
+
+  ruta.linea = L.polyline(orden.map(p=>p.coords), {
+    color:"#d63d2a", weight:4, opacity:.9, dashArray:"2 9", lineCap:"round"
+  }).addTo(map);
+
+  orden.forEach((p, i) => {
+    const b = L.marker(p.coords, {
+      interactive:false,
+      icon: L.divIcon({ className:"", html:`<div class="orden">${i+1}</div>`, iconSize:[22,22], iconAnchor:[-6,48] })
+    }).addTo(map);
+    ruta.badges.push(b);
+  });
+
+  ruta.activa = true;
+  ruta.orden = orden;
+  document.getElementById("btnQuitarRuta").style.display = "block";
+  map.flyToBounds(ruta.linea.getBounds().pad(0.18), { duration:.8 });
+  mostrarFichaRuta(orden, kmCalle);
+}
+
+function quitarRuta(){
+  if (ruta.linea) map.removeLayer(ruta.linea);
+  ruta.badges.forEach(b => map.removeLayer(b));
+  ruta.linea = null; ruta.badges = []; ruta.activa = false; ruta.orden = [];
+  document.getElementById("btnQuitarRuta").style.display = "none";
+}
+
+function mostrarFichaRuta(orden, km){
+  const min = Math.round(km/4.5*60);            /* caminando ~4.5 km/h */
+  const nStops = orden.length;
+  let gmapsBtn = "";
+  if (nStops <= 11){
+    const o = orden[0].coords, d = orden[nStops-1].coords;
+    const wp = orden.slice(1,-1).map(p=>p.coords.join(",")).join("|");
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${o.join(",")}&destination=${d.join(",")}${wp?`&waypoints=${encodeURIComponent(wp)}`:""}&travelmode=walking`;
+    gmapsBtn = `<a class="prim" href="${url}" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.6"/></svg>
+      Abrir en Google Maps</a>`;
+  }
+
+  document.getElementById("fichaImg").src = orden[0].imagen;
+  document.getElementById("fichaNombre").textContent = "Tu recorrido";
+  const badge = document.getElementById("fichaBadge");
+  badge.textContent = `${nStops} paradas`;
+  badge.style.setProperty("--c", "#d63d2a");
+
+  let html = `<div class="rutaMeta">
+      <span><b>${km.toFixed(1)} km</b> aprox.</span>
+      <span><b>~${min} min</b> caminando</span>
+    </div>
+    <div class="acciones">${gmapsBtn}
+      <button type="button" id="btnQuitarRuta2">Quitar recorrido</button>
+    </div>
+    <div class="paradas">` +
+    orden.map((p,i)=>`
+      <button class="parada" data-id="${p.ID}" type="button">
+        <span class="num">${i+1}</span>
+        <span><b>${p.nombre}</b><small>${CATS[p.tipo].label}</small></span>
+      </button>`).join("") +
+    `</div>
+    <p class="aviso">El orden se calcula para que camines lo menos posible entre paradas. Las distancias son en línea recta ajustadas a la cuadrícula del pueblo; para la ruta exacta calle a calle usa el botón de Google Maps${nStops>11?" (disponible con máximo 11 paradas)":""}.</p>
+    <footer>Un recorrido de El Refugio de Algazara · San Martín de los Llanos</footer>`;
+
+  const fBody = document.getElementById("fichaBody");
+  fBody.innerHTML = html;
+  fBody.querySelector("#btnQuitarRuta2").addEventListener("click", () => { quitarRuta(); cerrarFicha(); });
+  fBody.querySelectorAll(".parada").forEach(el =>
+    el.addEventListener("click", () => abrirFicha(+el.dataset.id)));
+
+  abrirDrawer();
+}
+
+/* ---------- Ficha de lugar ---------- */
+const ficha = document.getElementById("ficha");
+const fBody = document.getElementById("fichaBody");
+let idAbierto = null;
+
+function tituloSeccion2(tipo){
+  if (tipo === "gastronomico" || tipo === "artesanos") return "Una probadita del lugar";
+  if (tipo === "hospedaje") return "Así es la experiencia";
+  return "¿Qué se encuentra aquí?";
+}
+
+function abrirDrawer(){
+  ficha.classList.add("abierta");
+  ficha.setAttribute("aria-hidden","false");
+  document.getElementById("fichaScroll").scrollTop = 0;
+}
+
+function abrirFicha(id){
+  const p = PLACES.find(x => x.ID === id);
+  if (!p) return;
+  const cat = CATS[p.tipo];
+
+  if (idAbierto !== null) document.getElementById("icn-"+idAbierto)?.classList.remove("sel");
+  idAbierto = id;
+  document.getElementById("icn-"+id)?.classList.add("sel");
+  document.querySelectorAll(".tarjeta.activa").forEach(t=>t.classList.remove("activa"));
+  document.getElementById("card-"+id)?.classList.add("activa");
+
+  document.getElementById("fichaImg").src = p.imagen;
+  document.getElementById("fichaNombre").textContent = `${p.ID}. ${p.nombre}`;
+  const badge = document.getElementById("fichaBadge");
+  badge.textContent = cat.label;
+  badge.style.setProperty("--c", cat.color);
+
+  const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${p.coords[0]},${p.coords[1]}&travelmode=walking`;
+  const enSel = estado.sel.has(p.ID);
+  const secciones = [
+    { t:"¿Dónde queda ubicado?", txt:p.texto_1, vid:p.video_1 },
+    { t:tituloSeccion2(p.tipo),  txt:p.texto_2, vid:p.video_2 },
+    { t:"Veamos algunos eventos", txt:p.texto_3, vid:p.video_3 }
+  ].filter(s => (s.txt && s.txt.trim()) || (s.vid && s.vid.trim()));
+
+  let html = `<p class="intro">${p.descripcion}</p>`;
+  if (p.imagen2) html += `<div class="galeria"><img src="${p.imagen2}" alt="Fotografía de ${p.nombre}" loading="lazy" onerror="this.parentElement.style.display='none'"></div>`;
+  html += `<div class="acciones">
+    <a class="prim" href="${gmaps}" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.6"/></svg>
+      Cómo llegar</a>
+    <button type="button" id="btnSelFicha">${enSel ? "✓ En tu recorrido" : "+ Agregar al recorrido"}</button>
+  </div>`;
+  for (const s of secciones){
+    html += `<div class="seccion" style="--acc:${cat.color}">
+      <h3><i></i>${s.t}</h3>
+      ${s.txt && s.txt.trim() ? `<p>${s.txt}</p>` : ""}
+      ${s.vid && s.vid.trim() ? `<video controls preload="none" playsinline src="${s.vid}"></video>` : ""}
+    </div>`;
+  }
+  html += `<footer>Mapa turístico de San Martín de los Llanos · El Refugio de Algazara</footer>`;
+  fBody.innerHTML = html;
+
+  fBody.querySelector("#btnSelFicha").addEventListener("click", e => {
+    const ya = estado.sel.has(p.ID);
+    ya ? estado.sel.delete(p.ID) : estado.sel.add(p.ID);
+    e.target.textContent = ya ? "+ Agregar al recorrido" : "✓ En tu recorrido";
+    refrescar(false);
+    document.getElementById("icn-"+p.ID)?.classList.add("sel");
+  });
+
+  abrirDrawer();
+
+  const esMovil = window.matchMedia("(max-width:720px)").matches;
+  map.flyTo(p.coords, Math.max(map.getZoom(), 17), { duration:.8 });
+  setTimeout(()=> map.panBy([esMovil ? 0 : 215, esMovil ? window.innerHeight*0.22 : 0], { animate:true }), 850);
+}
+
+function cerrarFicha(){
+  ficha.classList.remove("abierta");
+  ficha.setAttribute("aria-hidden","true");
+  fBody.querySelectorAll("video").forEach(v => v.pause());
+  if (idAbierto !== null) document.getElementById("icn-"+idAbierto)?.classList.remove("sel");
+  document.querySelectorAll(".tarjeta.activa").forEach(t=>t.classList.remove("activa"));
+  idAbierto = null;
+}
+document.getElementById("fichaCerrar").addEventListener("click", cerrarFicha);
+document.addEventListener("keydown", e => { if (e.key === "Escape") cerrarFicha(); });
+
+/* ---------- Geolocalización ---------- */
+let miMarca = null;
+document.getElementById("btnGeo").addEventListener("click", () => {
+  if (!navigator.geolocation) return alert("Tu navegador no permite geolocalización.");
+  navigator.geolocation.getCurrentPosition(pos => {
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    if (miMarca) map.removeLayer(miMarca);
+    miMarca = L.circleMarker(ll, { radius:8, color:"#fff", weight:2.5, fillColor:"#1d6fd1", fillOpacity:1 })
+      .addTo(map).bindTooltip("Estás aquí", { className:"tt", direction:"top" });
+    map.flyTo(ll, 16, { duration:.8 });
+  }, () => alert("No pudimos obtener tu ubicación. Revisa los permisos del navegador."));
+});
+
+/* ---------- Arranque ---------- */
+pintarChips();
+refrescar(false);
+map.fitBounds(vistaInicial);
+</script>
+</body>
+</html>
